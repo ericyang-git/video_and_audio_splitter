@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频分割器（极速版）</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 使用 Inter 字体 */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 玻璃拟态效果 */
+        .glass-card {
+            background: rgba(35, 35, 45, 0.7);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.125);
+        }
+
+        /* 隐藏原生文件输入框 (不再需要，但保留样式) */
+        #file-input {
+            display: none;
+        }
+
+        /* 拖拽区域高亮 */
+        .drag-over {
+            border-color: #3b82f6;
+            transform: scale(1.02);
+        }
+        
+        /* 时间戳标签样式 */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 9999px;
+            padding: 4px 12px;
+            margin: 4px;
+            font-size: 14px;
+        }
+
+        .tag-remove {
+            margin-left: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .tag-remove:hover {
+            color: #fca5a5;
+        }
+        
+        /* 自定义开关样式 */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4b5563;
+            transition: .4s;
+            border-radius: 28px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #3b82f6;
+        }
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+        
+        /* 隐藏滚动条 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        
+        /* 加载动画 */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-lg mx-auto">
+        <h1 class="text-3xl font-bold text-center mb-2">视频分割器</h1>
+        <p class="text-gray-400 text-center mb-6">轻松剪辑，释放创意</p>
+
+        <!-- 主内容区 -->
+        <main id="app-container">
+            
+            <!-- 初始上传视图 -->
+            <div id="upload-view" class="w-full transition-opacity duration-300">
+                <div id="drop-zone" class="glass-card rounded-2xl p-6 text-center cursor-pointer border-2 border-dashed border-gray-600 transition-all duration-300">
+                    <svg class="mx-auto h-16 w-16 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4V12a4 4 0 014-4h12l4 4h12a4 4 0 014 4v4m-8-4l-4-4m0 0L8 8m16 0h12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                    <p class="mt-4 text-lg font-medium">点击下方按钮选择视频文件</p>
+                    <p class="text-sm text-gray-400 mt-1">（不支持拖放）</p>
+                    <button id="select-file-btn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                        选择 MP4 文件
+                    </button>
+                </div>
+            </div>
+
+            <!-- 文件加载后视图 -->
+            <div id="loaded-view" class="w-full hidden transition-opacity duration-300 space-y-4">
+                
+                <!-- 视频信息卡片 -->
+                <div class="glass-card rounded-2xl p-4 flex items-center space-x-4">
+                    <canvas id="thumbnail-canvas" class="w-32 h-20 bg-gray-800 rounded-lg object-cover"></canvas>
+                    <div class="flex-1">
+                        <p id="filename-label" class="font-bold text-sm break-all">文件名.mp4</p>
+                        <p id="duration-label" class="text-xs text-gray-400">时长: 00:00</p>
+                        <button id="reselect-btn" class="text-blue-400 hover:text-blue-500 text-xs mt-2">重新选择文件</button>
+                    </div>
+                </div>
+
+                <!-- 时间戳输入卡片 -->
+                <div class="glass-card rounded-2xl p-4">
+                    <label for="timestamps-input-field" class="block text-sm font-medium mb-2">输入分割时间点 (e.g., 5:20, 01:10:00)</label>
+                    <div id="tags-container" class="mb-2 flex flex-wrap items-center">
+                        <input type="text" id="timestamps-input-field" class="flex-1 bg-transparent text-white outline-none p-1 min-w-[100px]" placeholder="输入后按逗号或回车">
+                    </div>
+                    <p class="text-xs text-gray-500">支持格式: MM:SS 或 HH:MM:SS</p>
+                </div>
+
+                <!-- 选项和操作卡片 -->
+                <div class="glass-card rounded-2xl p-4">
+                     <div class="flex justify-between items-center mb-4">
+                        <label for="audio-toggle-checkbox" class="text-sm font-medium">同时导出 MP3 音频?</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="audio-toggle-checkbox" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button id="start-split-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2">
+                        <span id="button-text">开始分割</span>
+                        <div id="loader" class="loader hidden"></div>
+                    </button>
+                    <p id="progress-label" class="text-center text-sm text-gray-400 mt-3 h-5"></p>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- 全局函数，供 Python 调用 ---
+        function handleFileSelected(filename, duration) {
+            const filenameLabel = document.getElementById('filename-label');
+            const durationLabel = document.getElementById('duration-label');
+            
+            filenameLabel.textContent = filename;
+            const minutes = Math.floor(duration / 60);
+            const seconds = Math.floor(duration % 60);
+            durationLabel.textContent = `时长: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            switchToLoadedView();
+        }
+
+        function onProgress(message, percent) {
+            const progressLabel = document.getElementById('progress-label');
+            progressLabel.textContent = message;
+        }
+
+        function onError(message) {
+            const progressLabel = document.getElementById('progress-label');
+            progressLabel.textContent = `错误: ${message}`;
+            alert(`发生错误: ${message}`);
+            resetUI();
+        }
+
+        function onFinished(message, percent) {
+            const progressLabel = document.getElementById('progress-label');
+            progressLabel.textContent = message;
+            
+            // 直接在这里实现成功逻辑，不调用 showSuccess
+            const buttonText = document.getElementById('button-text');
+            const loader = document.getElementById('loader');
+            
+            buttonText.textContent = '完成';
+            loader.classList.add('hidden');
+            
+            setTimeout(() => {
+                // 重置 UI
+                const startSplitBtn = document.getElementById('start-split-btn');
+                startSplitBtn.disabled = false;
+                buttonText.textContent = '开始分割';
+                loader.classList.add('hidden');
+                progressLabel.textContent = "";
+                
+                // 重置时间戳
+                if (typeof timestamps !== 'undefined') {
+                    timestamps = [];
+                    renderTags();
+                }
+            }, 3000);
+        }
+
+        function switchToLoadedView() {
+            const uploadView = document.getElementById('upload-view');
+            const loadedView = document.getElementById('loaded-view');
+            uploadView.classList.add('opacity-0', 'hidden');
+            loadedView.classList.remove('hidden');
+            setTimeout(() => loadedView.classList.remove('opacity-0'), 50);
+        }
+        
+        function switchToUploadView() {
+            const uploadView = document.getElementById('upload-view');
+            const loadedView = document.getElementById('loaded-view');
+            loadedView.classList.add('opacity-0');
+            setTimeout(() => {
+                loadedView.classList.add('hidden');
+                uploadView.classList.remove('hidden');
+                uploadView.classList.remove('opacity-0');
+            }, 300);
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM 元素获取 ---
+            const uploadView = document.getElementById('upload-view');
+            const loadedView = document.getElementById('loaded-view');
+            const selectFileBtn = document.getElementById('select-file-btn');
+            const reselectBtn = document.getElementById('reselect-btn');
+            
+            const tagsContainer = document.getElementById('tags-container');
+            const timestampsInput = document.getElementById('timestamps-input-field');
+
+            const startSplitBtn = document.getElementById('start-split-btn');
+            const buttonText = document.getElementById('button-text');
+            const loader = document.getElementById('loader');
+            const progressLabel = document.getElementById('progress-label');
+            const audioToggle = document.getElementById('audio-toggle-checkbox');
+            
+            let timestamps = [];
+
+            // --- 事件监听 ---
+
+            // "选择文件"按钮 (初始视图和重新选择)
+            selectFileBtn.addEventListener('click', selectFileViaPywebview);
+            reselectBtn.addEventListener('click', selectFileViaPywebview);
+            
+            // 时间戳输入处理
+            timestampsInput.addEventListener('keydown', (e) => {
+                if (e.key === ',' || e.key === 'Enter') {
+                    e.preventDefault();
+                    const value = timestampsInput.value.trim();
+                    if (isValidTimestamp(value)) {
+                        addTag(value);
+                        timestampsInput.value = '';
+                    } else if (value) {
+                       alert('无效的时间格式！请使用 MM:SS 或 HH:MM:SS。');
+                    }
+                }
+            });
+
+            // 开始分割按钮
+            startSplitBtn.addEventListener('click', () => {
+                if (timestamps.length === 0) {
+                    alert("请输入至少一个分割时间点。");
+                    return;
+                }
+                
+                // 禁用按钮并显示加载状态
+                startSplitBtn.disabled = true;
+                buttonText.textContent = '处理中';
+                loader.classList.remove('hidden');
+                progressLabel.textContent = "正在准备...";
+
+                // 通过 pywebview API 发送数据到后端
+                window.pywebview.api.start_split(timestamps, audioToggle.checked);
+            });
+
+            // --- 功能函数 ---
+            
+            function selectFileViaPywebview() {
+                // 调用由 pywebview 注入的 Python API
+                window.pywebview.api.select_file();
+            }
+
+            function isValidTimestamp(value) {
+                 // 稍微放宽正则表达式以匹配 HH:MM:SS 和 M:S 等格式
+                 return /^(?:[0-5]?\d:){0,2}[0-5]?\d$/.test(value);
+            }
+
+            function addTag(value) {
+                if (timestamps.includes(value)) return;
+                timestamps.push(value);
+                renderTags();
+            }
+            
+            function removeTag(value) {
+                timestamps = timestamps.filter(t => t !== value);
+                renderTags();
+            }
+            
+            function renderTags() {
+                // 清空除了输入框以外的所有内容
+                while (tagsContainer.firstChild && tagsContainer.firstChild !== timestampsInput) {
+                    tagsContainer.removeChild(tagsContainer.firstChild);
+                }
+
+                timestamps.forEach(ts => {
+                    const tagEl = document.createElement('div');
+                    tagEl.className = 'tag';
+                    tagEl.innerHTML = `${ts} <span class="tag-remove" data-value="${ts}">&times;</span>`;
+                    
+                    tagEl.querySelector('.tag-remove').addEventListener('click', (e) => {
+                        removeTag(e.target.dataset.value);
+                    });
+                    
+                    tagsContainer.insertBefore(tagEl, timestampsInput);
+                });
+            }
+            
+            function showSuccess() {
+                buttonText.textContent = '完成';
+                loader.classList.add('hidden');
+                setTimeout(() => {
+                    resetUI();
+                    // 任务完成后，可以重置时间戳
+                    timestamps = [];
+                    renderTags();
+                    // 不再回到初始上传界面
+                }, 3000);
+            }
+            
+            function resetUI() {
+                startSplitBtn.disabled = false;
+                buttonText.textContent = '开始分割';
+                loader.classList.add('hidden');
+                progressLabel.textContent = "";
+            }
+
+        });
+    </script>
+</body>
+</html> 
