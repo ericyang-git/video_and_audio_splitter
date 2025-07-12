@@ -2,9 +2,6 @@
 
 一个简洁、高效的桌面应用，用于快速分割视频和音频文件。基于 Python、pywebview 和 ffmpeg 构建，提供清爽的用户界面和流畅的操作体验。
 
-![应用截图](placeholder.png)  
-*请将此处的 `placeholder.png` 替换为您的应用截图*
-
 ## ✨ 主要功能
 
 - **文件支持**: 支持导入 `MP4`, `MOV`, `MP3`, `WAV` 格式的文件。
